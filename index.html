@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Emulador Super Nintendo</title>
+<style>
+:root{
+  --u:clamp(34px,13.5vw,60px);          /* tamanho base dos botões */
+  --glass:rgba(255,255,255,.07);
+  --line:rgba(255,255,255,.12);
+  --txt:#ecebf5;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+html,body{margin:0;height:100%}
+body{
+  background:radial-gradient(1200px 700px at 20% -10%,#3a2a6b 0,transparent 60%),
+             radial-gradient(900px 600px at 100% 110%,#0f4c5c 0,transparent 55%),#0d0b16;
+  color:var(--txt);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;
+  display:flex;justify-content:center;
+  padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+  overflow-x:hidden;
+}
+.app{width:100%;max-width:760px;display:flex;flex-direction:column;gap:12px}
+header{display:flex;align-items:center;justify-content:center;gap:10px}
+header h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;
+  background:linear-gradient(90deg,#b9a4ff,#6ee7f9);-webkit-background-clip:text;background-clip:text;color:transparent}
+.dot{width:8px;height:8px;border-radius:50%;background:#6ee7a8;box-shadow:0 0 10px #6ee7a8}
+
+.stage{display:grid;gap:12px;grid-template-columns:1fr 1fr;grid-template-areas:"center center" "left right"}
+.center{grid-area:center;display:flex;flex-direction:column;gap:10px;min-width:0}
+.left{grid-area:left}.right{grid-area:right}
+
+.screen{position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:18px;overflow:hidden;
+  border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.55),0 0 0 6px rgba(255,255,255,.04)}
+#game{position:absolute;inset:0;width:100%;height:100%}
+.open{position:absolute;inset:0;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;
+  text-align:center;padding:16px;background:radial-gradient(circle at 50% 30%,#241c45,#0a0813)}
+.open .logo{font-size:clamp(22px,6vw,34px);font-weight:800;letter-spacing:.12em;
+  background:linear-gradient(90deg,#c7b8ff,#6ee7f9);-webkit-background-clip:text;background-clip:text;color:transparent}
+.open p{margin:0;opacity:.65;font-size:13px}
+.cta{background:linear-gradient(135deg,#7c5cff,#2fb8d6);color:#fff;border:0;border-radius:999px;
+  padding:12px 28px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(124,92,255,.45)}
+.cta:active{transform:scale(.97)}
+
+.status{position:absolute;inset:0;z-index:5;display:none;flex-direction:column;gap:12px;align-items:center;justify-content:center;
+  text-align:center;padding:20px;background:rgba(10,8,19,.92);font-size:14px;line-height:1.5}
+.status.show{display:flex}
+.status .spin{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.15);border-top-color:#7c5cff;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.vh{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+label.cta{display:inline-block}
+.lib{width:100%;max-width:340px;max-height:34%;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.lib .row{display:flex;gap:6px}
+.lib .play{flex:1;text-align:left;background:var(--glass);border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:9px 12px;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.lib .del{background:var(--glass);border:1px solid var(--line);color:#ff8a96;border-radius:12px;padding:0 12px;cursor:pointer}
+.toolbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.tb{background:var(--glass);border:1px solid var(--line);color:var(--txt);border-radius:999px;
+  padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;backdrop-filter:blur(8px)}
+.tb:active{background:rgba(255,255,255,.18)}
+
+.side{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 8px;
+  background:var(--glass);border:1px solid var(--line);border-radius:22px;backdrop-filter:blur(10px)}
+.btn{border:0;color:#fff;cursor:pointer;font-weight:800;touch-action:none;transition:transform .05s,filter .05s}
+.btn:active,.btn.on{transform:scale(.92);filter:brightness(1.35)}
+.shoulder{width:min(100%,calc(var(--u)*2.4));height:calc(var(--u)*.62);border-radius:999px;font-size:14px;
+  background:linear-gradient(180deg,#5b5877,#403e57);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 4px 10px rgba(0,0,0,.35)}
+
+.dpad,.face{display:grid;grid-template-columns:repeat(3,var(--u));grid-template-rows:repeat(3,var(--u));gap:2px}
+.dpad .btn{background:linear-gradient(180deg,#3d3b55,#262439);border-radius:10px;font-size:calc(var(--u)*.38);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.15),0 4px 8px rgba(0,0,0,.35)}
+.dpad .u{grid-area:1/2}.dpad .l{grid-area:2/1}.dpad .r{grid-area:2/3}.dpad .d{grid-area:3/2}
+.dpad .c{grid-area:2/2;background:#262439;border-radius:6px;margin:6px}
+.face .btn{border-radius:50%;font-size:calc(var(--u)*.4);box-shadow:inset 0 2px 0 rgba(255,255,255,.3),0 5px 12px rgba(0,0,0,.4)}
+.face .x{grid-area:1/2;background:linear-gradient(145deg,#5d8cff,#2f55c9)}
+.face .y{grid-area:2/1;background:linear-gradient(145deg,#4fd68a,#1f9a55)}
+.face .a{grid-area:2/3;background:linear-gradient(145deg,#ff6b7a,#c9323f)}
+.face .b{grid-area:3/2;background:linear-gradient(145deg,#ffd45e,#d99a1d);color:#3a2a00}
+
+.pill{height:calc(var(--u)*.4);min-height:26px;width:min(100%,calc(var(--u)*2));border-radius:999px;font-size:11px;letter-spacing:.08em;
+  background:linear-gradient(180deg,#4a4866,#33314b);box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+
+.hint{font-size:11px;opacity:.55;text-align:center;line-height:1.6;padding:0 8px}
+
+/* Celular deitado: controles nas laterais da tela */
+@media (orientation:landscape) and (max-height:560px){
+  header,.hint{display:none}
+  :root{--u:clamp(30px,11vh,52px)}
+  body{align-items:center}
+  .app{max-width:none;height:calc(100dvh - 24px);justify-content:center}
+  .stage{grid-template-columns:1fr auto 1fr;grid-template-areas:"left center right";align-items:center;height:100%}
+  .center{height:100%;justify-content:center}
+  .screen{width:auto;height:calc(100dvh - 24px - 46px);max-width:calc(100vw - 2*(var(--u)*3 + 60px))}
+  .side{background:transparent;border:0;backdrop-filter:none;padding:0;gap:10px}
+}
+/* Telas largas (desktop) */
+@media (min-width:760px) and (orientation:landscape) and (min-height:561px){
+  .stage{grid-template-columns:1fr minmax(0,2.2fr) 1fr;grid-template-areas:"left center right";align-items:center}
+  :root{--u:56px}
+  .app{max-width:1200px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header><span class="dot"></span><h1>Super Nintendo</h1></header>
+
+  <div class="stage">
+    <div class="center">
+      <div class="screen">
+        <div id="game"></div>
+        <div class="open" id="open">
+          <div class="logo">SUPER NES</div>
+          <p>Escolha a ROM nos arquivos do aparelho</p>
+          <label class="cta" for="file">📱 Abrir ROM do celular</label>
+          <input type="file" id="file" class="vh">
+          <div class="lib" id="lib"></div>
+        </div>
+        <div class="status" id="status"></div>
+      </div>
+      <div class="toolbar">
+        <button class="tb" id="pause">⏸ Pausar</button>
+        <button class="tb" id="reset">↻ Reiniciar</button>
+        <button class="tb" id="full">⛶ Tela cheia</button>
+        <button class="tb" id="swap">📂 Trocar ROM</button>
+      </div>
+    </div>
+
+    <div class="side left">
+      <button class="btn shoulder" data-b="10">L</button>
+      <div class="dpad">
+        <button class="btn u" data-b="4">▲</button><button class="btn l" data-b="6">◀</button>
+        <div class="c"></div>
+        <button class="btn r" data-b="7">▶</button><button class="btn d" data-b="5">▼</button>
+      </div>
+      <button class="btn pill" data-b="2">SELECT</button>
+    </div>
+
+    <div class="side right">
+      <button class="btn shoulder" data-b="11">R</button>
+      <div class="face">
+        <button class="btn x" data-b="9">X</button><button class="btn y" data-b="1">Y</button>
+        <button class="btn a" data-b="8">A</button><button class="btn b" data-b="0">B</button>
+      </div>
+      <button class="btn pill" data-b="3">START</button>
+    </div>
+  </div>
+
+  <div class="hint">Teclado: setas · X = A · Z = B · S = X · A = Y · Q/W = L/R · Enter = Start · Shift = Select<br>Funciona offline após a primeira abertura com internet. Use apenas ROMs de jogos que você possui.</div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const file = $('#file');
+let started = false, gameStarted = false;
+function setStatus(html, err, spin){
+  const el = $('#status');
+  el.className = 'status' + (html ? ' show' : '');
+  el.innerHTML = html ? (spin ? '<div class="spin"></div>' : '') + '<div>' + html + '</div>' + (err ? '<button class="cta" onclick="location.reload()">Tentar de novo</button>' : '') : '';
+}
+
+$('#swap').onclick = () => location.reload();
+
+async function startGame(f){
+  if (!f || started) return;
+  started = true;
+  $('#open').style.display = 'none';
+  // usa a pasta local ./data/ se existir; senão, o CDN (que o service worker guarda para uso offline)
+  let dataPath = 'https://cdn.emulatorjs.net/stable/data/';
+  try { const r = await fetch('./data/loader.js', {method:'HEAD'}); if (r.ok) dataPath = './data/'; } catch(e) {}
+  window.EJS_player = '#game';
+  window.EJS_core = 'snes';
+  window.EJS_gameUrl = URL.createObjectURL(f);
+  window.EJS_gameName = f.name.replace(/\.[^.]+$/, '');
+  window.EJS_pathtodata = dataPath;
+  window.EJS_startOnLoaded = true;
+  window.EJS_color = '#7c5cff';
+  window.EJS_Buttons = { playPause:false, restart:false, mute:true, settings:true, fullscreen:false, saveState:true, loadState:true, screenRecord:false, gamepad:false, cheat:false, volume:true, saveSavFiles:false, loadSavFiles:false, quickSave:false, quickLoad:false, screenshot:false, cacheManager:false, exitEmulation:false, netplay:false, diskButton:false, contextMenuButton:false };
+  setStatus('Carregando emulador…', false, true);
+  window.EJS_onGameStart = () => { gameStarted = true; setStatus(''); };
+  const s = document.createElement('script');
+  s.src = window.EJS_pathtodata + 'loader.js';
+  s.onerror = () => setStatus(
+    !navigator.onLine ? 'Sem internet. Na primeira vez o emulador precisa ser baixado: conecte-se e tente de novo.' :
+    location.protocol === 'file:' ? 'Você abriu o arquivo direto do aparelho. Hospede a página (ex.: GitHub Pages) e abra pelo endereço https://…' :
+    'Não foi possível baixar o emulador (cdn.emulatorjs.net). Verifique a conexão ou se algum bloqueador/navegador interno está impedindo.', true);
+  document.body.appendChild(s);
+  setTimeout(() => { if (!gameStarted) setStatus('O jogo está demorando para iniciar.<br>Confira se a ROM é de Super Nintendo (.smc, .sfc ou .zip) e se há internet na primeira abertura.', true); }, 40000);
+}
+
+function press(i, v){
+  const e = window.EJS_emulator;
+  if (e && e.gameManager) e.gameManager.simulateInput(0, i, v);
+}
+document.querySelectorAll('[data-b]').forEach(btn => {
+  const i = +btn.dataset.b;
+  const down = ev => { ev.preventDefault(); btn.classList.add('on'); press(i,1); if (navigator.vibrate) navigator.vibrate(8); };
+  const up = ev => { ev.preventDefault(); btn.classList.remove('on'); press(i,0); };
+  btn.addEventListener('pointerdown', down);
+  ['pointerup','pointerleave','pointercancel'].forEach(t => btn.addEventListener(t, up));
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+});
+
+// Biblioteca de ROMs guardadas no próprio aparelho (IndexedDB)
+const idb = () => new Promise((ok, no) => {
+  const r = indexedDB.open('snes-roms', 1);
+  r.onupgradeneeded = () => r.result.createObjectStore('roms', {keyPath:'name'});
+  r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error);
+});
+const tx = async (mode, fn) => { const d = await idb(); return new Promise((ok, no) => {
+  const t = d.transaction('roms', mode), q = fn(t.objectStore('roms'));
+  t.oncomplete = () => ok(q && q.result); t.onerror = () => no(t.error); }); };
+async function renderLib(){
+  const box = $('#lib'); box.innerHTML = '';
+  let roms = []; try { roms = await tx('readonly', st => st.getAll()) || []; } catch(e) {}
+  roms.forEach(r => {
+    const row = document.createElement('div'); row.className = 'row';
+    const b = document.createElement('button'); b.className = 'play'; b.textContent = '▶ ' + r.name;
+    b.onclick = () => startGame(new File([r.blob], r.name));
+    const d = document.createElement('button'); d.className = 'del'; d.textContent = '✕';
+    d.onclick = async () => { await tx('readwrite', st => st.delete(r.name)); renderLib(); };
+    row.append(b, d); box.append(row);
+  });
+}
+file.onchange = async () => {
+  const f = file.files[0]; if (!f) return;
+  try { await tx('readwrite', st => st.put({name: f.name, blob: f})); } catch(e) {}
+  startGame(f);
+};
+renderLib();
+
+let paused = false;
+$('#pause').onclick = () => {
+  const e = window.EJS_emulator; if (!e) return;
+  paused = !paused; paused ? e.pause() : e.play();
+  $('#pause').textContent = paused ? '▶ Continuar' : '⏸ Pausar';
+};
+$('#reset').onclick = () => { const e = window.EJS_emulator; if (e && e.gameManager) e.gameManager.restart(); };
+$('#full').onclick = () => {
+  const el = $('.screen');
+  document.fullscreenElement ? document.exitFullscreen() : (el.requestFullscreen && el.requestFullscreen());
+};
+
+// Cache offline: depois de jogar uma vez com internet, o emulador passa a abrir sem conexão
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
